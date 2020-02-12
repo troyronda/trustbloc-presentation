@@ -62,6 +62,8 @@
     import { AriesREST, AriesWebHook } from '../ariesrest.js'
     import { Slide } from 'eagle.js'
     const uuidv4 = require('uuid/v4');
+    import { Aries } from '@hyperledger/aries-framework-go'
+
 
     export default {
         name: 'DemoBasicMessage',
@@ -84,7 +86,7 @@
                 botMessageResponse: null,
                 botMessageContent: null,
                 ariesBotAgentClient: new AriesREST(this.botAgentURL),
-                ariesHumanAgentClient: new AriesREST(this.humanAgentURL),
+                ariesHumanAgentClient:  Aries({}),
                 ariesHumanWebHookClient: new AriesWebHook(this.humanAgentWebhookURL),
             };
         },
@@ -93,19 +95,21 @@
         },
         methods: {
             getBotInvitation: function() {
-                this.ariesBotAgentClient.didexchange.CreateInvitation({}).then(res => {
+                this.ariesBotAgentClient.didexchange.createInvitation({}).then(res => {
                         this.invitation = res.data.invitation;
                     })
             },
             connectToBot: async function() {
+                this.startNotifier()
+
                 if (this.invitation === null) {
                     this.connectionStatus = "Retrieve the invitation before proceeding"
                 } else {
                     this.connectionStatus = "connecting"
 
                     try {
-                        let res = await this.ariesHumanAgentClient.didexchange.ReceiveInvitation(this.invitation)
-                        this.connectionID = res.data.connection_id
+                        let res = await this.ariesHumanAgentClient.didexchange.receiveInvitation(JSON.stringify(this.invitation))
+                        this.connectionID = res.connection_id
                     } catch (err) {
                         this.connectionStatus = err
                         return
@@ -114,22 +118,23 @@
                     const attempts = 40
                     for (let i =0; i < attempts; i++) {
                         await new Promise(r => setTimeout(r, 250));
-                        let res = await this.ariesHumanAgentClient.didexchange.QueryConnectionByID(this.connectionID)
+                        const req = { ID: this.connectionID }
+                        let res = await this.ariesHumanAgentClient.didexchange.queryConnectionByID(JSON.stringify(req))
 
-                        if (res.data.result.State == 'completed') {
-                            this.connectionStatus = res.data.result.State
+                        if (res.result.State == 'completed') {
+                            this.connectionStatus = res.result.State
                             break;
                         }
 
                         if (i == attempts - 1) {
-                            this.connectionStatus = "timed out at state: " + res.data.result.State
+                            this.connectionStatus = "timed out at state: " + res.result.State
                         }
                     }
                 }
             },
             botRegistration: async function() {
                 try {
-                    let res = await this.ariesBotAgentClient.messaging.RegisterMessageService({
+                    let res = await this.ariesBotAgentClient.messaging.registerMessageService({
                             "name" : "basic-message",
                             "type" : "https://didcomm.org/basicmessage/1.0/message"
                         })
@@ -145,22 +150,24 @@
             },
             registerMessage: async function(agentClient) {
                 try {
-                    let res = await agentClient.messaging.RegisterMessageService({
+                    const req = {
                             "name" : "basic-message",
                             "type" : "https://didcomm.org/basicmessage/1.0/message"
-                        })
+                        }
+                    let res = await agentClient.messaging.registerMessageService(JSON.stringify(req))
 
                     console.log(res)
                     this.registerStatus = "success"
                 } catch(err) {
-                        this.registerStatus = err
+                    this.registerStatus = err
                 }
             },
             unregisterMessage: async function(agentClient) {
                 try {
-                    let res = await agentClient.messaging.UnregisterMessageService({
+                    const req = {
                             "name" : "basic-message",
-                        })
+                        }
+                    let res = await agentClient.messaging.unregisterMessageService(JSON.stringify(req))
                         console.log(res)
                 } catch(err) {
                     console.log(err)
@@ -168,9 +175,10 @@
             },
             botConnStatus: async function() {
                 try {
-                    let res = await this.ariesHumanAgentClient.didexchange.QueryConnectionByID(this.connectionID)
+                    const req = { ID: this.connectionID }
+                    let res = await this.ariesHumanAgentClient.didexchange.queryConnectionByID(JSON.stringify(req))
 
-                    if (res.data.result.State == 'completed') {
+                    if (res.result.State == 'completed') {
                         this.botConnnectionStatus = "success"
                     } else {
                         this.botConnnectionStatus = "in-progress"
@@ -184,7 +192,7 @@
             },
             sendMessage: async function() {
                 try {
-                    await this.ariesHumanAgentClient.messaging.SendNewMessage({
+                    const req = {
                             "connection_ID": this.connectionID,
                             "message_body": {
                                 "@id" : uuidv4(),
@@ -193,34 +201,43 @@
                                 "sent_time": new Date().toISOString(),
                                 "~l10n": {"locale":"en"}
                             },
-                        })
+                        }
+                    await this.ariesHumanAgentClient.messaging.sendNewMessage(JSON.stringify(req))
                 } catch(err) {
                     this.botMessageResponse = err
                 }
 
                 this.nextStep()
             },
-            refreshTopicsData: async function() {
-                try {
-                    var topicsResponse = await this.ariesHumanWebHookClient.topics.Check();
-                    if (topicsResponse.data.message && topicsResponse.data.message['@type'] === "https://didcomm.org/basicmessage/1.0/message") {
-                        this.botMessageResponse = topicsResponse.data;
-                        this.botMessageContent = topicsResponse.data.message.content;
-                    }
-                } catch(err) {
-                    this.botMessageResponse = err;
+            startNotifier: function () {
+                const topic = "sample-topic"
+                const ariesAgentClient = this.ariesHumanAgentClient
+                async function* run() {
+                    while (true)
+                        yield await ariesAgentClient.waitForNotification(topic)
                 }
-           },
+
+                const asyncIterator = run();
+
+                (async () => {
+                    for await (const val of asyncIterator) {
+                        if (val && val.notification) {
+                            const notification = JSON.parse(val.notification)
+                            console.log(notification.message)
+
+                            if (notification.message && notification.message['@type'] === "https://didcomm.org/basicmessage/1.0/message") {
+                                this.botMessageResponse = notification.message;
+                                this.botMessageContent = notification.message.content;
+                            }
+                        }
+                    }
+                })();
+            }           
         },
         mounted: function () {
             if (this.autoBotMsgRegister) {
                 this.botRegistration();
             }
-            this.refreshTopicsData();
-
-            setInterval(function () {
-                this.refreshTopicsData();
-            }.bind(this), 1000);
         }
   }
 

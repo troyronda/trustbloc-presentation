@@ -43,6 +43,7 @@
 <script>
     import { Slide } from 'eagle.js'
     import { AriesREST } from '../ariesrest.js'
+    import { Aries } from '@hyperledger/aries-framework-go'
 
     export default {
         name: 'DemoSetup',
@@ -60,7 +61,7 @@
                 connectionID: null,
                 registerStatus: null,
                 routerConnnectionStatus: null,
-                ariesAgentClient: new AriesREST(this.agentURL),
+                ariesAgentClient: Aries({}),
                 ariesRouterClient: new AriesREST(this.routerURL),
             };
         },
@@ -70,7 +71,7 @@
         methods: {
             getRouterInvitation: function () {
                 try {
-                    this.ariesRouterClient.didexchange.CreateInvitation({}).then(res => {
+                    this.ariesRouterClient.didexchange.createInvitation({}).then(res => {
                             this.invitation = res.data.invitation;
                         })
                 } catch (err) {
@@ -78,14 +79,18 @@
                 }
             },
             connectToRouter: async function () {
+                const opts = {"agent-default-label":"dem-js-agent","http-resolver-url":"","auto-accept":true,"outbound-transport":["ws","http"],"transport-return-route":"all","notifier-func-name":"sample-topic"}
+                await this.ariesAgentClient.start(JSON.stringify(opts))
+                //this.startNotifier();
+
                 if (this.invitation === null) {
                     this.connectionStatus = "Retrieve the invitation before proceeding"
                 } else {
                     this.connectionStatus = "connecting"
 
                     try {
-                        let res = await this.ariesAgentClient.didexchange.ReceiveInvitation(this.invitation)
-                        this.connectionID = res.data.connection_id
+                        let res = await this.ariesAgentClient.didexchange.receiveInvitation(JSON.stringify(this.invitation))
+                        this.connectionID = res.connection_id
                     } catch (err) {
                         this.connectionStatus = err
                         return
@@ -94,15 +99,16 @@
                     const attempts = 40
                     for (let i =0; i < attempts; i++) {
                         await new Promise(r => setTimeout(r, 250));
-                        let res = await this.ariesAgentClient.didexchange.QueryConnectionByID(this.connectionID)
+                        const req = { ID: this.connectionID }
+                        let res = await this.ariesAgentClient.didexchange.queryConnectionByID(JSON.stringify(req))
 
-                        if (res.data.result.State == 'completed') {
-                            this.connectionStatus = res.data.result.State
+                        if (res.result.State == 'completed') {
+                            this.connectionStatus = res.result.State
                             break;
                         }
 
                         if (i == attempts - 1) {
-                            this.connectionStatus = "timed out at state: " + res.data.result.State
+                            this.connectionStatus = "timed out at state: " + res.result.State
                         }
                     }
                 }
@@ -111,29 +117,32 @@
                 if (this.routerConnnectionStatus !== "success") {
                     this.registerStatus = "Make sure connection with router is complete."
                 } else {
-                    this.ariesAgentClient.router.Register({
+                    const req = {
                             "connectionID": this.connectionID
-                        })
+                        }
+                    this.ariesAgentClient.router.register(JSON.stringify(req))
                         // eslint-disable-next-line no-unused-vars
                         .then(res => {
                             this.registerStatus = "success"
                         }).catch(error => {
-                            this.registerStatus = error.response.data
+                            this.registerStatus = error
                         })
                 }
             },
             unregisterRouter: async function () {
                 try {
-                    await this.ariesAgentClient.router.Unregister({})
+                    const req = {}
+                    await this.ariesAgentClient.router.unregister(JSON.stringify(req))
                     this.registerStatus = "router unregistered"
                 } catch (err) {
                     this.registerStatus = err
                 }  
             },
             routerConnStatus: async function () {
-                let res = await this.ariesAgentClient.didexchange.QueryConnectionByID(this.connectionID)
+                const req = { ID: this.connectionID }
+                let res = await this.ariesAgentClient.didexchange.queryConnectionByID(JSON.stringify(req))
 
-                if (res.data.result.State == 'completed') {
+                if (res.result.State == 'completed') {
                     this.routerConnnectionStatus = "success"
                 } else {
                     this.routerConnnectionStatus = "in-progress"
@@ -141,6 +150,25 @@
             },
             clearRouterConnStatus : function () {
                 this.routerConnnectionStatus = ""
+            },
+            startNotifier: function () {
+                const topic = "sample-topic"
+                const ariesAgentClient = this.ariesAgentClient
+                async function* run() {
+                    while (true)
+                        yield await ariesAgentClient.waitForNotification(topic)
+                }
+
+                const asyncIterator = run();
+
+                (async () => {
+                    for await (const val of asyncIterator) {
+                        if (val) {
+                            // TODO display messages in this page
+                            console.log(val)
+                        }
+                    }
+                })();
             }
         }
     }

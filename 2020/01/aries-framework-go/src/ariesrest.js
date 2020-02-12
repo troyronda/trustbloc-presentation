@@ -12,73 +12,73 @@ import axios from 'axios';
 export const AriesREST = function(agentURL) {
 
     this.didexchange = {
-        CreateInvitation: async function(data) {
+        createInvitation: async function(data) {
             const endpoint = agentURL + "/connections/create-invitation"
             return axios.post(endpoint, data)
         },
-        ReceiveInvitation: async function(data) {
+        receiveInvitation: async function(data) {
             const endpoint = agentURL + "/connections/receive-invitation"
             return axios.post(endpoint, data)
         },
-        AcceptInvitation: async function() {
+        acceptInvitation: async function() {
             // TODO
             // POST /connections/{id}/accept-invitation
         },
-        AcceptExchangeRequest: async function() {
+        acceptExchangeRequest: async function() {
             // TODO
             // POST /connections/{id}/accept-request
         },
-        CreateImplicitInvitation: async function(data) {
+        createImplicitInvitation: async function(data) {
             const endpoint = AriesREST._agentURL + "/connections/create-implicit-invitation"
             return axios.post(endpoint, data)
         },
-        RemoveConnection: async function() {
+        removeConnection: async function() {
             // TODO
             // POST /connections/{id}/remove
         },
-        QueryConnectionByID: async function(connectionID) {
+        queryConnectionByID: async function(connectionID) {
             const endpoint = agentURL + "/connections/" + connectionID
             return axios.get(endpoint)
         },
-        QueryConnections: async function() {
+        queryConnections: async function() {
             const endpoint = agentURL + "/connections"
             return axios.get(endpoint)
         }
     }
 
     this.messaging = {
-        RegisteredServices: async function() {
+        registeredServices: async function() {
             const endpoint = AriesREST._agentURL + "/message/services"
             return axios.get(endpoint)
         },
-        RegisterMessageService: async function(data) {
+        registerMessageService: async function(data) {
             const endpoint = agentURL + "/message/register-service"
             return axios.post(endpoint, data)
         },
-        RegisterHTTPMessageService: async function(data) {
+        registerHTTPMessageService: async function(data) {
             const endpoint = AriesREST._agentURL + "/http-over-didcomm/register"
             return axios.post(endpoint, data)
         },
-        UnregisterMessageService: async function(data) {
+        unregisterMessageService: async function(data) {
             const endpoint = agentURL + "/message/unregister-service"
             return axios.post(endpoint, data)
         },
-        SendNewMessage: async function(data) {
+        sendNewMessage: async function(data) {
             const endpoint = agentURL + "/message/send"
             return axios.post(endpoint, data)
         },
-        SendReplyMessage: async function(data) {
+        sendReplyMessage: async function(data) {
             const endpoint = AriesREST._agentURL + "/message/reply"
             return axios.post(endpoint, data)
         }
     }
 
     this.router = {
-        Register: async function(data) {
+        register: async function(data) {
             const endpoint = agentURL + "/route/register"
             return axios.post(endpoint, data)
         },
-        Unregister: async function(data) {
+        unregister: async function(data) {
             const endpoint = agentURL + "/route/unregister"
             return axios.delete(endpoint, data)
         },
@@ -87,7 +87,7 @@ export const AriesREST = function(agentURL) {
 
 export const AriesWebHook = function(webhookURL) {
     this.topics = {
-        Check: async function() {
+        check: async function() {
             const endpoint = webhookURL + "/checktopics"
             return axios.get(endpoint);
         }
